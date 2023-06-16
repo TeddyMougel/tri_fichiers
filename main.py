@@ -6,17 +6,67 @@ from tkinter import filedialog
 # Fonction pour extraire les liens du fichier
 def extract_links(file_name):
     file_path = os.path.join(app_directory, file_name)
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='iso-8859-1') as file:
+        php_links = []
+        htm_links = []
+        js_links = []
         content = file.read()
-        links = re.findall(r'(?i)<a\s+.*?href=["\'](.*?)["\']', content)
-        php_links = [link for link in links if link.endswith('.php')]
-        htm_links = [link for link in links if link.endswith('.htm')]
-        js_links = [link for link in links if link.endswith('.js')]
-        return php_links, htm_links, js_links
+        updated_content = content
+
+ # Fonction pour extraire les liens du fichier
+def extract_links(file_name):
+    file_path = os.path.join(app_directory, file_name)
+    with open(file_path, 'r', encoding='iso-8859-1') as file:
+        php_links = []
+        htm_links = []
+        js_links = []
+        content = file.read()
+        updated_content = content
+
+        for i, line in enumerate(updated_content.splitlines()):
+            line = line.strip()
+            if line.startswith('require_once(') or line.startswith('require(') or line.startswith('include_once(') or line.startswith('include('):
+                link = re.search(r"'(.*?)'", line)
+                if link:
+                    link = link.group(1)
+                    if link.endswith('.php') and link.startswith('ajax_'):
+                        php_links.append(link)
+                        updated_link = './ajax/' + link
+                        updated_content = updated_content.replace(link, updated_link)
+                        # Mettre à jour la ligne dans le contenu mis à jour
+                        updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
+                    elif link.endswith('.php'):
+                        print(link)
+                        if link =="includes/common.php":
+                            php_links.append(link)
+                            updated_link = '../includes/common_ref.php'
+                            
+                            updated_content = updated_content.replace(link, updated_link)
+                            # Mettre à jour la ligne dans le contenu mis à jour
+                            updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
+                        else :
+                            php_links.append(link)
+                            updated_link = '../' + link
+                            updated_content = updated_content.replace(link, updated_link)
+                            # Mettre à jour la ligne dans le contenu mis à jour
+                            updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
+                        print("lien update : "+updated_link)
+                    elif link.endswith('.js'):
+                        js_links.append(link)
+                        updated_link = '../' + link
+                        updated_content = updated_content.replace(link, updated_link)
+                        # Mettre à jour la ligne dans le contenu mis à jour
+                        updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
+    
+    # Écrire le contenu mis à jour dans le fichier
+    with open(file_path, 'w', encoding='iso-8859-1') as file:
+        file.write('\n'+ updated_content)
+    return php_links, htm_links, js_links
 
 # Fonction pour ranger le fichier sélectionné dans le dossier choisi
 def move_file(file_name, destination_folder):
     print(file_name+" deplacer dans le dossier "+destination_folder)
+    
     # Extraction des liens du fichier
     php_links, htm_links, js_links = extract_links(file_name)
     
@@ -32,6 +82,7 @@ def move_file(file_name, destination_folder):
     print("Liens JavaScript :")
     for link in js_links:
         print(link)
+    
 
     # Déplacement du fichier
     source_path = os.path.join(app_directory, file_name)
