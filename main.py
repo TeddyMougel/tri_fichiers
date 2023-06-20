@@ -1,21 +1,15 @@
 import os
 import re
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog,messagebox
 
-# Fonction pour extraire les liens du fichier
-def extract_links(file_name):
-    file_path = os.path.join(app_directory, file_name)
-    with open(file_path, 'r', encoding='iso-8859-1') as file:
-        php_links = []
-        htm_links = []
-        js_links = []
-        content = file.read()
-        updated_content = content
+def extract_additional_links(file_content):
+    open_links = re.findall(r'window\.open\([\'"](.*?)[\'"]', file_content)
+    href_links = re.findall(r'href=[\'"](.*?)[\'"]', file_content)
+    redirect_links = re.findall(r"redirection\([\'\"](.*?)[\'\"]", file_content)
+    return open_links, href_links, redirect_links
 
- # Fonction pour extraire les liens du fichier
-def extract_links(file_name):
-    file_path = os.path.join(app_directory, file_name)
+def extract_links(file_path):
     with open(file_path, 'r', encoding='iso-8859-1') as file:
         php_links = []
         htm_links = []
@@ -32,72 +26,104 @@ def extract_links(file_name):
                     if link.endswith('.php') and link.startswith('ajax_'):
                         php_links.append(link)
                         updated_link = './ajax/' + link
-                        updated_content = updated_content.replace(link, updated_link)
-                        # Mettre à jour la ligne dans le contenu mis à jour
-                        updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
+                        updated_content = updated_content.replace(link, updated_link, 1)
                     elif link.endswith('.php'):
-                        print(link)
-                        if link =="includes/common.php":
+                        if link == "includes/common.php":
                             php_links.append(link)
                             updated_link = '../includes/common_ref.php'
-                            
-                            updated_content = updated_content.replace(link, updated_link)
-                            # Mettre à jour la ligne dans le contenu mis à jour
-                            updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
+                        elif link.startswith("fonction"):
+                            php_links.append(link)
+                            updated_link = '../fonctions/' + link 
                         else :
                             php_links.append(link)
                             updated_link = '../' + link
-                            updated_content = updated_content.replace(link, updated_link)
-                            # Mettre à jour la ligne dans le contenu mis à jour
-                            updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
-                        print("lien update : "+updated_link)
+                        if updated_link not in updated_content:
+                            updated_content = updated_content.replace(link, updated_link, 1)
                     elif link.endswith('.js'):
                         js_links.append(link)
                         updated_link = '../' + link
-                        updated_content = updated_content.replace(link, updated_link)
-                        # Mettre à jour la ligne dans le contenu mis à jour
-                        updated_content = '\n'.join(updated_content.splitlines()[:i]) + line.replace(link, updated_link) + '\n'.join(updated_content.splitlines()[i+1:]) 
-    
-    # Écrire le contenu mis à jour dans le fichier
+                        if updated_link not in updated_content:
+                            updated_content = updated_content.replace(link, updated_link, 1)
+
     with open(file_path, 'w', encoding='iso-8859-1') as file:
-        file.write('\n'+ updated_content)
+        file.write(updated_content)
+
     return php_links, htm_links, js_links
 
-# Fonction pour ranger le fichier sélectionné dans le dossier choisi
 def move_file(file_name, destination_folder):
-    print(file_name+" deplacer dans le dossier "+destination_folder)
-    
-    # Extraction des liens du fichier
-    php_links, htm_links, js_links = extract_links(file_name)
-    
-    # Affichage des liens trouvés
-    print("Liens PHP :")
-    for link in php_links:
-        print(link)
-    
-    print("Liens HTML :")
-    for link in htm_links:
-        print(link)
-    
-    print("Liens JavaScript :")
-    for link in js_links:
-        print(link)
-    
+    print(file_name + " déplacé dans le dossier " + destination_folder)
 
-    # Déplacement du fichier
     source_path = os.path.join(app_directory, file_name)
     destination_path = os.path.join(app_directory, destination_folder, file_name)
     os.rename(source_path, destination_path)
 
-    # Affichage du fichier suivant
-    show_next_file()
+    php_links, htm_links, js_links = extract_links(destination_path)
 
-# Fonction pour passer au fichier suivant sans le déplacer
+    print("Liens PHP :")
+    for link in php_links:
+        print(link)
+
+    print("Liens HTML :")
+    for link in htm_links:
+        print(link)
+
+    print("Liens JavaScript :")
+    for link in js_links:
+        print(link)
+
+    with open(destination_path, 'r', encoding='iso-8859-1') as file:
+        content = file.read()
+        open_links, href_links, redirect_links = extract_additional_links(content)
+
+        if open_links or href_links or redirect_links:
+            additional_links_window = tk.Toplevel()
+            additional_links_window.title("Liens supplémentaires")
+
+            links = open_links + href_links + redirect_links
+            current_link_index = 0
+
+            def update_link(folder):
+                nonlocal current_link_index
+                link = links[current_link_index]
+                updated_link = "../" + folder + "/" + os.path.basename(link)
+                updated_content = content.replace(link, updated_link)
+                with open(destination_path, 'w', encoding='iso-8859-1') as file:
+                    file.write(updated_content)
+                current_link_index += 1
+                show_next_link()
+
+            def show_next_link():
+                if current_link_index < len(links):
+                    link = links[current_link_index]
+                    link_label.config(text=link)
+                else:
+                    additional_links_window.destroy()
+                    show_next_file()
+            def skip_link():
+                nonlocal current_link_index
+                current_link_index += 1
+                show_next_link()
+            
+            link_label = tk.Label(additional_links_window, text="Traitement des liens")
+            link_label.pack()
+
+            skipbutton = tk.Button(additional_links_window,text="Ignoré",command=skip_link)
+            skipbutton.pack()
+
+            folder_buttons = []
+            for folder in folder_list:
+                button = tk.Button(additional_links_window, text=folder, command=lambda folder=folder: update_link(folder))
+                button.pack()
+                folder_buttons.append(button)
+
+            show_next_link()
+
+        else:
+            show_next_file()
+
 def skip_file():
-    # Affichage du fichier suivant
     show_next_file()
 
-# Fonction pour afficher le fichier suivant
 def show_next_file():
     global current_file_index
     if current_file_index < len(file_list):
@@ -108,46 +134,52 @@ def show_next_file():
         label.config(text="Tous les fichiers ont été traités.")
 
 def create_folder():
-    new_folder_path = filedialog.askdirectory()
-    if new_folder_path:
-        new_folder_name = os.path.basename(new_folder_path)
-        new_folder_dir = os.path.join(app_directory, new_folder_name)
-        os.makedirs(new_folder_dir)
-        folder_list.append(new_folder_name)
-        button = tk.Button(window, text=new_folder_name, command=lambda folder=new_folder_name: move_file(label.cget("text"), folder))
-        button.pack()
+    def validate_folder():
+        new_folder_name = folder_entry.get()
+        if new_folder_name:
+            new_folder_dir = os.path.join(app_directory, new_folder_name)
+            if not os.path.exists(new_folder_dir):
+                os.makedirs(new_folder_dir)
+                folder_list.append(new_folder_name)
+                button = tk.Button(window, text=new_folder_name, command=lambda folder=new_folder_name: move_file(label.cget("text"), folder))
+                button.pack()
+                folder_window.destroy()
+            else:
+                messagebox.showerror("Erreur", "Le dossier existe déjà.")
+        else:
+            messagebox.showerror("Erreur", "Veuillez entrer un nom de dossier.")
 
-# Création de la fenêtre principale
+    folder_window = tk.Toplevel(window)
+    folder_window.title("Créer un dossier")
+
+    folder_label = tk.Label(folder_window, text="Nom du dossier :")
+    folder_label.pack()
+
+    folder_entry = tk.Entry(folder_window)
+    folder_entry.pack()
+
+    validate_button = tk.Button(folder_window, text="Valider", command=validate_folder)
+    validate_button.pack()
+
 window = tk.Tk()
-
-# Obtenir le répertoire de l'application
 app_directory = os.path.dirname(os.path.abspath(__file__))
 
-# Parcourir les fichiers et dossiers
-file_list = [f for f in os.listdir(app_directory) if os.path.isfile(os.path.join(app_directory, f)) and (f.endswith(".php") or f.endswith(".htm")) ]
+file_list = [f for f in os.listdir(app_directory) if os.path.isfile(os.path.join(app_directory, f)) and (f.endswith(".php") or f.endswith(".htm"))]
 folder_list = [f for f in os.listdir(app_directory) if os.path.isdir(os.path.join(app_directory, f))]
 
-# Index du fichier actuel
 current_file_index = 0
-
-# Affichage initial du premier fichier
 label = tk.Label(window, text="")
 label.pack()
 show_next_file()
 
-# Bouton pour passer au fichier suivant sans le déplacer
 skip_button = tk.Button(window, text="Skip", command=skip_file)
 skip_button.pack()
 
-# Bouton pour crée un nouveau fichier
 create_folder_button = tk.Button(window, text="Créer un dossier", command=create_folder)
 create_folder_button.pack()
 
-# Afficher les dossiers en tant que boutons
 for folder in folder_list:
     button = tk.Button(window, text=folder, command=lambda folder=folder: move_file(label.cget("text"), folder))
     button.pack()
 
-
-# Lancement de la boucle principale de l'interface graphique
 window.mainloop()
